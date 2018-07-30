@@ -229,6 +229,7 @@ int8_t bmm150_get_sensor_settings(struct bmm150_dev *dev);
 /*!
  * @brief This API reads the magnetometer data from registers 0x42 to 0x49
  * and updates the dev structure with compensated mag data in micro-tesla
+ * if using floating point, and 16 * micro-teslas if using int16_t for the data
  *
  * @param[in,out] dev     :   Structure instance of bmm150_dev.
  *
