@@ -1,6 +1,18 @@
 # Change Log
 All notable changes to the BMM150 Sensor API will be documented in this file.
 
+## v1.0.3, 10 Jan 2020
+### Changed
+- Updated License 
+
+## v1.0.2, 23 Dec 2019
+### Changed
+- Fixed warnings and errors from static code analysis tools 
+
+## v1.0.1, 08 Nov 2018
+### Changed
+- Auto-aligned the Source code using uncrustify 
+
 ## v0.9.0, 12 Mar 2017
 ### Added
 - Aux. Data compensation API to support when BMM150 is connected as auxiliary sensor
