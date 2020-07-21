@@ -11,12 +11,6 @@ bmm150 sensor driver supports the following Bosch MEMS sensors
 * BMC056 - Combination of bma2x2 + bmm150 APIs
 * BMX055 - Combination of bma2x2 + bmg160 + bmm150 APIs
     
-## Version
-File          | Version | Date
---------------|---------|-------------
-bmm150.c      |  1.0.0  | 12 Sep 2017
-bmm150.h      |  1.0.0  | 12 Sep 2017
-bmm150_defs.h |  1.0.0  | 12 Sep 2017
 
 ## Integration details
 * Integrate bmm150.h, bmm150_defs.h and bmm150.c file in to your project.
@@ -45,13 +39,14 @@ fill in the various parameters as shown below.
 ``` c
 struct bmm150_dev dev;
 int8_t rslt = BMM150_OK;
+uint8_t dev_addr = 0;
 
 /* Sensor interface over SPI with native chip select line */
-dev.dev_id = 0;
+dev.intf_ptr = &dev_addr;
 dev.intf = BMM150_SPI_INTF;
 dev.read = user_spi_read;
 dev.write = user_spi_write;
-dev.delay_ms = user_delay_ms;
+dev.delay_us = user_delay_us;
 
 rslt = bmm150_init(&dev);
 ```
@@ -59,13 +54,14 @@ rslt = bmm150_init(&dev);
 ``` c
 struct bmm150_dev dev;
 int8_t rslt = BMM150_OK;
+uint8_t dev_addr = BMM150_DEFAULT_I2C_ADDRESS;
 
 /* Sensor interface over I2C */
-dev.dev_id = BMM150_DEFAULT_I2C_ADDRESS;
+dev.intf_ptr = &dev_addr;
 dev.intf = BMM150_I2C_INTF;
 dev.read = user_i2c_read;
 dev.write = user_i2c_write;
-dev.delay_ms = user_delay_ms;
+dev.delay_us = user_delay_us;
 
 rslt = bmm150_init(&dev);
 ```
@@ -78,11 +74,12 @@ int8_t set_sensor_settings(struct bmm150_dev *dev)
 	int8_t rslt;
 
 	/* Setting the power mode as normal */
-	dev->settings.pwr_mode = BMM150_NORMAL_MODE;
+	dev->settings.pwr_mode = BMM150_POWERMODE_NORMAL_MODE;
 	rslt = bmm150_set_op_mode(dev);
 	
 	/* Setting the preset mode as Low power mode 
-	i.e. data rate = 10Hz XY-rep = 1 Z-rep = 2*/
+	 * i.e. data rate = 10Hz XY-rep = 1 Z-rep = 2
+	 */
 	dev->settings.preset_mode = BMM150_PRESETMODE_LOWPOWER;
 	rslt = bmm150_set_presetmode(dev);
 	
@@ -138,7 +135,7 @@ int8_t perform_self_tests(struct bmm150_dev *dev)
 	int8_t rslt;
 
 	/* Perform Normal Self test */
-	rslt = bmm150_perform_self_test(BMM150_NORMAL_SELF_TEST, dev);
+	rslt = bmm150_perform_self_test(BMM150_SELF_TEST_NORMAL, dev);
 	printf("\n NORMAL SELF TEST RESULT :  %d",rslt);
 	
 	/* Validate normal self test result */
@@ -148,7 +145,7 @@ int8_t perform_self_tests(struct bmm150_dev *dev)
 		printf("\n Normal Self test failed ");
 	}
 	/* Perform Advanced Self test */
-	rslt |= bmm150_perform_self_test(BMM150_ADVANCED_SELF_TEST, dev);
+	rslt |= bmm150_perform_self_test(BMM150_SELF_TEST_ADVANCED, dev);
 	printf("\n ADVANCED SELF TEST RESULT : %d",rslt);
 
 	/* Validate Advanced self test result */
@@ -171,7 +168,7 @@ int8_t drdy_interrupt_configure(struct bmm150_dev *dev)
 	uint16_t desired_settings;
 
 	/* Set the macros to enable DRDY pin */
-	desired_settings = BMM150_DRDY_PIN_EN_SEL | BMM150_DRDY_POLARITY_SEL;
+	desired_settings = BMM150_SEL_DRDY_PIN_EN | BMM150_SEL_DRDY_POLARITY;
 	/* Set the drdy_pin_en to enable the drdy interrupt  */
 	dev->settings.int_settings.drdy_pin_en = BMM150_INT_ENABLE;
 	/* Set the polarity as active high on the DRDY pin */
@@ -193,7 +190,7 @@ int8_t drdy_interrupt_handling(struct bmm150_dev *dev)
 	/* Read the interrupt status */
 	rslt = bmm150_get_interrupt_status(dev);
 	if (rslt == BMM150_OK) {
-		if (dev->int_status & BMM150_DATA_READY_INT) {
+		if (dev->int_status & BMM150_INT_ASSERTED_DRDY) {
 			/* Interrupt asserted - Read mag data */
 			rslt = bmm150_read_mag_data(dev);
 			printf("\n MAG DATA ");

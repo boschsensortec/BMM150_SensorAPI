@@ -1,13 +1,13 @@
 ## Steps to configure BMM150 Interrupts
 1. Set the value of "desired_settings" from the list of macros from **TABLE 1.0-Macros for enabling the desired_settings**
     to enable the configuration of the selected settings. (Multiple settings can be set by bitwise OR-ing of the macros)
-	>   Ex. desired_settings = BMM150_DRDY_PIN_EN_SEL | BMM150_DRDY_POLARITY_SEL;
+	>   Ex. desired_settings = BMM150_SEL_DRDY_PIN_EN | BMM150_SEL_DRDY_POLARITY;
 	
 2. Set the desired configuration in the dev structure using macros from the **TABLE 1.1-Interrupt configuration settings**.
 	> NOTE : Configuration settings will be set only when we set the corresponding "desired_settings" which enables the settings.
 ``` c
 	/* Select the DRDY pin and polarity settings */
-	desired_settings = BMM150_DRDY_PIN_EN_SEL | BMM150_DRDY_POLARITY_SEL;
+	desired_settings = BMM150_SEL_DRDY_PIN_EN | BMM150_SEL_DRDY_POLARITY;
 	/* Set the desired configurations of DRDY pin and its polarity */
   	dev->settings.int_settings.drdy_pin_en = BMM150_INT_ENABLE;
 	dev->settings.int_settings.drdy_polarity = BMM150_ACTIVE_LOW_POLARITY;
@@ -18,19 +18,19 @@
 
    The value of dev->int_status is taken and a bitwise AND operation is performed with predefined interrupt status macros (listed below) to find the interrupt status which is either set or reset.
 
-   - BMM150_LOW_THRESHOLD_INT_X	
-   - BMM150_LOW_THRESHOLD_INT_Y	   
-   - BMM150_LOW_THRESHOLD_INT_Z	   
-   - BMM150_HIGH_THRESHOLD_INT_X	   
-   - BMM150_HIGH_THRESHOLD_INT_Y	   
-   - BMM150_HIGH_THRESHOLD_INT_Z	   
-   - BMM150_DATA_OVERFLOW_INT	   
-   - BMM150_DATA_OVERRUN_INT		   
-   - BMM150_DATA_READY_INT		   
+   - BMM150_INT_THRESHOLD_X_LOW 
+   - BMM150_INT_THRESHOLD_Y_LOW    
+   - BMM150_INT_THRESHOLD_Z_LOW    
+   - BMM150_INT_THRESHOLD_X_HIGH	   
+   - BMM150_INT_THRESHOLD_Y_HIGH	   
+   - BMM150_INT_THRESHOLD_Z_HIGH	   
+   - BMM150_INT_DATA_OVERFLOW   
+   - BMM150_INT_DATA_OVERRUN 	   
+   - BMM150_INT_DATA_READY		   
    
 ``` c
  /* Example for checking interrupt status*/
- if (dev->int_status & BMM150_DATA_READY_INT) {
+ if (dev->int_status & BMM150_INT_ASSERTED_DRDY) {
  	/*Occurrence of data ready interrupt */
 	printf("\n Interrupt asserted");
  } else {
@@ -49,17 +49,17 @@
    ### TABLE 1.0-Macros for enabling the desired_settings	
 Macros to set for "desired_settings" | Settings which can be enabled/Disabled
 -------------------------------------|----------------------------------------------------------
-BMM150_DRDY_PIN_EN_SEL	             | Data ready interrupt mapping to DRDY PIN 		
-BMM150_INT_PIN_EN_SEL		     | Low-Threshold, High-Threshold and Overflow interrupts mapping to INT PIN 
-BMM150_DRDY_POLARITY_SEL	     | Polarity of DRDY pin 
-BMM150_INT_LATCH_SEL		     | Latch settings of INT pin
-BMM150_INT_POLARITY_SEL		     | Polarity of INT pin
-BMM150_DATA_OVERRUN_INT_SEL	     | Data overrun interrupt setting
-BMM150_OVERFLOW_INT_SEL		     | Data overflow interrupt setting
-BMM150_HIGH_THRESHOLD_INT_SEL	     | High threshold interrupt setting
-BMM150_LOW_THRESHOLD_INT_SEL	     | Low threshold interrupt setting
-BMM150_LOW_THRESHOLD_SETTING_SEL     | Setting Low threshold value to trigger interrupt 
-BMM150_HIGH_THRESHOLD_SETTING_SEL    | Setting High threshold value to trigger interrupt
+BMM150_SEL_DRDY_PIN_EN               | Data ready interrupt mapping to DRDY PIN 		
+BMM150_SEL_INT_PIN_EN                | Low-Threshold, High-Threshold and Overflow interrupts mapping to INT PIN 
+BMM150_SEL_DRDY_POLARITY             | Polarity of DRDY pin 
+BMM150_SEL_INT_LATCH                 | Latch settings of INT pin
+BMM150_SEL_INT_POLARITY              | Polarity of INT pin
+BMM150_SEL_DATA_OVERRUN_INT          | Data overrun interrupt setting
+BMM150_SEL_OVERFLOW_INT              | Data overflow interrupt setting
+BMM150_SEL_HIGH_THRESHOLD_INT        | High threshold interrupt setting
+BMM150_SEL_LOW_THRESHOLD_INT         | Low threshold interrupt setting
+BMM150_SEL_LOW_THRESHOLD_SETTING     | Setting Low threshold value to trigger interrupt 
+BMM150_SEL_HIGH_THRESHOLD_SETTING    | Setting High threshold value to trigger interrupt
   
 
    ### TABLE 1.1-Interrupt configuation settings
@@ -103,8 +103,8 @@ int8_t high_threshold_interrupt(struct bmm150_dev *dev)
 	uint16_t desired_settings;
 
 	/* Enable the desired settings to be set in the sensor */
-	desired_settings = BMM150_HIGH_THRESHOLD_INT_SEL | BMM150_HIGH_THRESHOLD_SETTING_SEL |
-		BMM150_INT_PIN_EN_SEL | BMM150_INT_POLARITY_SEL | BMM150_INT_LATCH_SEL;
+	desired_settings = BMM150_SEL_HIGH_THRESHOLD_INT | BMM150_SEL_HIGH_THRESHOLD_SETTING |
+		BMM150_SEL_INT_PIN_EN | BMM150_SEL_INT_POLARITY | BMM150_SEL_INT_LATCH;
 	
 	/* Set the desired configuration */
 	/* Enable the mapping of interrupt to the interrupt pin*/
@@ -132,13 +132,13 @@ int8_t high_threshold_interrupt_handling(struct bmm150_dev *dev)
 	
 	rslt = bmm150_get_interrupt_status(dev);
 	if (rslt == BMM150_OK) {
-		if (dev->int_status & BMM150_HIGH_THRESHOLD_INT_X) {
+		if (dev->int_status & BMM150_INT_THRESHOLD_X_HIGH) {
 			printf("\n HIGH THRESHOLD INTERRUPT ON X AXIS ");
 		}
-		if (dev->int_status & BMM150_HIGH_THRESHOLD_INT_Y) {
+		if (dev->int_status & BMM150_INT_THRESHOLD_Y_HIGH) {
 			printf("\n HIGH THRESHOLD INTERRUPT ON Y AXIS ");
 		}
-		if(dev->int_status & BMM150_HIGH_THRESHOLD_INT_Z) {
+		if(dev->int_status & BMM150_INT_THRESHOLD_Z_HIGH) {
 			printf("\n HIGH THRESHOLD INTERRUPT IN Z AXIS ");
 		}
 	}
@@ -156,8 +156,8 @@ int8_t drdy_overflow_int_setting(struct bmm150_dev *dev)
 	uint16_t desired_settings;
 
 	/* Enable the desired settings to be set in the sensor */
-	desired_settings = BMM150_DRDY_PIN_EN_SEL | BMM150_OVERFLOW_INT_SEL |
-		BMM150_INT_PIN_EN_SEL | BMM150_INT_LATCH_SEL;
+	desired_settings = BMM150_SEL_DRDY_PIN_EN | BMM150_SEL_OVERFLOW_INT |
+		BMM150_SEL_INT_PIN_EN | BMM150_SEL_INT_LATCH;
 	
 	/* Set the desired configuration */
 	/* Enable the drdy interrupt  */
@@ -184,8 +184,8 @@ int8_t drdy_overflow_int_handling(struct bmm150_dev *dev)
 	rslt = bmm150_get_interrupt_status(dev);
 	if (rslt == BMM150_OK) {
 		/* Multiple interrupt assertion can be checked as follows */
-		if ((dev->int_status & BMM150_DATA_READY_INT) ||
-			(dev->int_status & BMM150_DATA_OVERFLOW_INT)) {
+		if ((dev->int_status & BMM150_INT_ASSERTED_DRDY) ||
+			(dev->int_status & BMM150_INT_DATA_OVERFLOW)) {
 			/* Either data ready or overflow has occurred */
 			printf("\n Interrupt asserted ");
 		} else {

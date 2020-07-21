@@ -30,9 +30,9 @@
 * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 * POSSIBILITY OF SUCH DAMAGE.
 *
-* @file bmm150.c
-* @date 10/01/2020
-* @version  1.0.3
+* @file       bmm150.c
+* @date       2020-06-03
+* @version    v2.0.0
 *
 */
 
@@ -42,16 +42,16 @@
 
 /************************** Internal macros *******************************/
 /* Sensor ODR, Repetition and axes enable/disable settings */
-#define MODE_SETTING_SEL               UINT16_C(0x000F)
+#define MODE_SETTING_SEL                UINT16_C(0x000F)
 
 /* Interrupt pin settings like polarity,latch and int_pin enable */
-#define INTERRUPT_PIN_SETTING_SEL      UINT16_C(0x01F0)
+#define INTERRUPT_PIN_SETTING_SEL       UINT16_C(0x01F0)
 
 /* Settings to enable/disable interrupts */
-#define INTERRUPT_CONFIG_SEL           UINT16_C(0x1E00)
+#define INTERRUPT_CONFIG_SEL            UINT16_C(0x1E00)
 
 /* Interrupt settings for configuring threshold values */
-#define INTERRUPT_THRESHOLD_CONFIG_SEL UINT16_C(0x6000)
+#define INTERRUPT_THRESHOLD_CONFIG_SEL  UINT16_C(0x6000)
 
 /********************** Static function declarations ************************/
 
@@ -62,7 +62,9 @@
  * @param[in] dev : Structure instance of bmm150_dev.
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
 static int8_t null_ptr_check(const struct bmm150_dev *dev);
 
@@ -78,7 +80,9 @@ static int8_t null_ptr_check(const struct bmm150_dev *dev);
  * 0x01             |    Sleep/Active modes
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error.
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
 static int8_t set_power_control_bit(uint8_t pwrcntrl_bit, struct bmm150_dev *dev);
 
@@ -89,7 +93,9 @@ static int8_t set_power_control_bit(uint8_t pwrcntrl_bit, struct bmm150_dev *dev
  * @param[in,out] dev      : Structure instance of bmm150_dev
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error.
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
 static int8_t read_trim_registers(struct bmm150_dev *dev);
 
@@ -99,16 +105,18 @@ static int8_t read_trim_registers(struct bmm150_dev *dev);
  *
  *  op_mode    |  Power mode
  * ------------|-----------------------
- *   0x00      |   BMM150_NORMAL_MODE
- *   0x01      |   BMM150_FORCED_MODE
- *   0x03      |   BMM150_SLEEP_MODE
+ *   0x00      |   BMM150_POWERMODE_NORMAL
+ *   0x01      |   BMM150_POWERMODE_FORCED
+ *   0x03      |   BMM150_POWERMODE_SLEEP
  *
  * @param[in,out] dev      : Structure instance of bmm150_dev
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error.
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t write_op_mode(uint8_t op_mode, const struct bmm150_dev *dev);
+static int8_t write_op_mode(uint8_t op_mode, struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API sets the device from suspend to sleep mode
@@ -117,16 +125,19 @@ static int8_t write_op_mode(uint8_t op_mode, const struct bmm150_dev *dev);
  * @param[in,out] dev      : Structure instance of bmm150_dev
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error.
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
 static int8_t suspend_to_sleep_mode(struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API sets the xy repetition value in the 0x51 register.
  *
- * @param[in,out] dev      : Structure instance of bmm150_dev
+ * @param[in] settings  : Structure instance of bmm150_settings.
+ * @param[in,out] dev   : Structure instance of bmm150_dev
  *
- *  dev->settings.xy_rep    |  nXY(XY Repetitions)
+ *     settings->xy_rep     |  nXY(XY Repetitions)
  * -------------------------|-----------------------
  *   0x00                   |   1
  *   0x01                   |   3
@@ -135,19 +146,22 @@ static int8_t suspend_to_sleep_mode(struct bmm150_dev *dev);
  *    .                     |   .
  *   0xFF                   |   511
  *
- * @note number of XY Repetitions nXY  = 1+2(dev->settings.xy_rep)
+ * @note number of XY Repetitions nXY  = 1+2(settings->xy_rep)
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error.
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t set_xy_rep(const struct bmm150_dev *dev);
+static int8_t set_xy_rep(const struct bmm150_settings *settings, struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API sets the z repetition value in the 0x52 register.
  *
- * @param[in,out] dev      : Structure instance of bmm150_dev
+ * @param[in] settings  : Structure instance of bmm150_settings.
+ * @param[in,out] dev   : Structure instance of bmm150_dev
  *
- *  dev->settings.z_rep     |  nZ(Z Repetitions)
+ *     settings->z_rep      |  nZ(Z Repetitions)
  * -------------------------|-----------------------
  *   0x00                   |   1
  *   0x01                   |   2
@@ -156,19 +170,22 @@ static int8_t set_xy_rep(const struct bmm150_dev *dev);
  *    .                     |   .
  *   0xFF                   |   256
  *
- * @note number of Z Repetitions nZ  = 1+(dev->settings.z_rep)
+ * @note number of Z Repetitions nZ  = 1+(settings->z_rep)
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error.
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t set_z_rep(const struct bmm150_dev *dev);
+static int8_t set_z_rep(const struct bmm150_settings *settings, struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API is used to set the output data rate of the sensor
  *
+ * @param[in] settings  : Structure instance of bmm150_settings.
  * @param[in] dev       : Structure instance of bmm150_dev.
  *
- *  dev->settings.data_rate |   Data rate (ODR)
+ *    settings->data_rate   |   Data rate (ODR)
  * -------------------------|-----------------------
  *   0x00                   |  BMM150_DATA_RATE_10HZ
  *   0x01                   |  BMM150_DATA_RATE_02HZ
@@ -180,34 +197,40 @@ static int8_t set_z_rep(const struct bmm150_dev *dev);
  *   0x07                   |  BMM150_DATA_RATE_30HZ
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t set_odr(const struct bmm150_dev *dev);
+static int8_t set_odr(const struct bmm150_settings *settings, struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API sets the preset mode ODR and repetition settings.
+ * @param[in] settings : Structure instance of bmm150_settings
  * @param[in] dev      : Structure instance of bmm150_dev
  *
- *  API settings            |  Representation
- * -------------------------|------------------------------
- * dev->settings.data_rate  | Output Data Rate (ODR)
- * dev->settings.xy_rep     | XY repetition value
- * dev->settings.z_rep      | Z-repetition value
+ *  API settings        |  Representation
+ * ---------------------|------------------------------
+ * settings->data_rate  | Output Data Rate (ODR)
+ * settings->xy_rep     | XY repetition value
+ * settings->z_rep      | Z-repetition value
  *
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error.
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t set_odr_xyz_rep(const struct bmm150_dev *dev);
+static int8_t set_odr_xyz_rep(const struct bmm150_settings *settings, struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API is used to enable or disable the magnetic
  * measurement of x,y,z axes based on the value of xyz_axes_control.
  *
- * @param[in] dev        : Structure instance of bmm150_dev.
+ * @param[in] settings  : Structure instance of bmm150_settings.
+ * @param[in] dev       : Structure instance of bmm150_dev.
  *
- *  dev->settings.xyz_axes_control | Measurement axes/channel
- *  -------------------------------|--------------------------
+ *  settings->xyz_axes_control | Measurement axes/channel
+ *  ---------------------------|--------------------------
  *  Bit 0                      | X - Channel
  *  Bit 1                      | Y - Channel
  *  Bit 2                      | Z - Channel
@@ -215,7 +238,7 @@ static int8_t set_odr_xyz_rep(const struct bmm150_dev *dev);
  * @note Setting 1 - Disables Channel measurement
  * @note Setting 0 - Enables Channel measurement
  *
- * dev->settings.xyz_axes_control | Measurement axes Enabled/disabled
+ *   settings->xyz_axes_control   | Measurement axes Enabled/disabled
  * -------------------------------|------------------------------------
  *  0x01                          | Disables X axis (Y,Z axes enabled)
  *  0x02                          | Disables Y axis (X,Z axes enabled)
@@ -223,9 +246,11 @@ static int8_t set_odr_xyz_rep(const struct bmm150_dev *dev);
  *  0x07                          | Disables all X,Y,Z axes measurement
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t set_control_measurement_xyz(const struct bmm150_dev *dev);
+static int8_t set_control_measurement_xyz(const struct bmm150_settings *settings, struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API is used to identify the settings which the user
@@ -248,12 +273,15 @@ static uint8_t are_settings_changed(uint16_t sub_settings, uint16_t settings);
  *
  * @param[in] desired_settings : Contains the settings which user wants to
  * change.
- * @param[in] dev : Structure instance of bmm150_dev.
+ * @param[in] settings         : Structure instance of bmm150_settings.
+ * @param[in] dev              : Structure instance of bmm150_dev.
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t mode_settings(uint16_t desired_settings, const struct bmm150_dev *dev);
+static int8_t mode_settings(uint16_t desired_settings, const struct bmm150_settings *settings, struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API is used to parse and store the sensor
@@ -261,12 +289,10 @@ static int8_t mode_settings(uint16_t desired_settings, const struct bmm150_dev *
  *
  * @param[in] reg_data   : Pointer of an array consisting all sensor
  *                         setting data from 0x4B to 0x52 registers.
- * @param[in] dev        : Structure instance of bmm150_dev.
+ * @param[in] settings   : Structure instance of bmm150_settings.
  *
- * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
  */
-static void parse_setting(const uint8_t *reg_data, struct bmm150_dev *dev);
+static void parse_setting(const uint8_t *reg_data, struct bmm150_settings *settings);
 
 /*!
  * @brief This API is used to enable the interrupts and map them to the
@@ -278,12 +304,17 @@ static void parse_setting(const uint8_t *reg_data, struct bmm150_dev *dev);
  *
  * @param[in] desired_settings : Contains the settings which user wants to
  *                               change.
+ * @param[in] settings         : Structure instance of bmm150_settings.
  * @param[in] dev              : Structure instance of bmm150_dev.
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t interrupt_pin_settings(uint16_t desired_settings, const struct bmm150_dev *dev);
+static int8_t interrupt_pin_settings(uint16_t desired_settings,
+                                     const struct bmm150_settings *settings,
+                                     struct bmm150_dev *dev);
 
 /*!
  * @brief This API is used to enable data overrun , overflow interrupts and
@@ -293,12 +324,16 @@ static int8_t interrupt_pin_settings(uint16_t desired_settings, const struct bmm
  *
  * @param[in] desired_settings : Contains the settings which user wants to
  *                               change.
+ * @param[in] settings         : Structure instance of bmm150_settings.
  * @param[in] dev              : Structure instance of bmm150_dev.
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t interrupt_config(uint16_t desired_settings, const struct bmm150_dev *dev);
+static int8_t interrupt_config(uint16_t desired_settings, const struct bmm150_settings *settings,
+                               struct bmm150_dev *dev);
 
 /*!
  * @brief This API is used to write the user specified High/Low threshold value
@@ -306,12 +341,17 @@ static int8_t interrupt_config(uint16_t desired_settings, const struct bmm150_de
  *
  * @param[in] desired_settings : Contains the settings which user wants to
  *                               change.
+ * @param[in] settings         : Structure instance of bmm150_settings.
  * @param[in] dev              : Structure instance of bmm150_dev.
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t interrupt_threshold_settings(uint16_t desired_settings, const struct bmm150_dev *dev);
+static int8_t interrupt_threshold_settings(uint16_t desired_settings,
+                                           const struct bmm150_settings *settings,
+                                           struct bmm150_dev *dev);
 
 #ifdef BMM150_USE_FLOATING_POINT
 
@@ -398,9 +438,11 @@ static int16_t compensate_z(int16_t mag_data_z, uint16_t data_rhall, const struc
  * @param[in] dev          : Structure instance of bmm150_dev.
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t perform_normal_self_test(const struct bmm150_dev *dev);
+static int8_t perform_normal_self_test(struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API is used to enable the normal self test by setting
@@ -411,9 +453,11 @@ static int8_t perform_normal_self_test(const struct bmm150_dev *dev);
  * @param[in] dev               : Structure instance of bmm150_dev.
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t enable_normal_self_test(uint8_t *self_test_enable, const struct bmm150_dev *dev);
+static int8_t enable_normal_self_test(uint8_t *self_test_enable, struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API is used to validate the results of normal self test
@@ -423,9 +467,11 @@ static int8_t enable_normal_self_test(uint8_t *self_test_enable, const struct bm
  * @param[in] dev       : Structure instance of bmm150_dev
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t validate_normal_self_test(const struct bmm150_dev *dev);
+static int8_t validate_normal_self_test(struct bmm150_dev *dev);
 
 /*!
  * @brief This internal API is used to perform advanced self test for Z axis
@@ -449,7 +495,9 @@ static int8_t perform_adv_self_test(struct bmm150_dev *dev);
  * @param[in] dev   :  Structure instance of bmm150_dev
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
 static int8_t adv_self_test_settings(struct bmm150_dev *dev);
 
@@ -461,13 +509,15 @@ static int8_t adv_self_test_settings(struct bmm150_dev *dev);
  * @param[out] data_z            : Z-axis Magnetometer data
  * @param[in] dev                : Structure instance of bmm150_dev
  *
- * self_test_current       | Self-test current Direction
+ *  self_test_current      | Self-test current Direction
  *-------------------------|------------------------------
  *     0x03                | BMM150_ENABLE_POSITIVE_CURRENT
  *     0x02                | BMM150_ENABLE_NEGATIVE_CURRENT
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
 static int8_t adv_self_test_measurement(uint8_t self_test_current, int16_t *data_z, struct bmm150_dev *dev);
 
@@ -504,9 +554,11 @@ static int8_t validate_adv_self_test(int16_t positive_data_z, int16_t negative_d
  *     0x03                | BMM150_ENABLE_POSITIVE_CURRENT
  *
  * @return Result of API execution status
- * @retval zero -> Success / +ve value -> Warning / -ve value -> Error
+ * @retval 0 -> Success
+ * @retval >0 -> Warning
+ * @retval <0 -> Fail
  */
-static int8_t set_adv_self_test_current(uint8_t self_test_current, const struct bmm150_dev *dev);
+static int8_t set_adv_self_test_current(uint8_t self_test_current, struct bmm150_dev *dev);
 
 /********************** Global function definitions ************************/
 
@@ -520,37 +572,27 @@ int8_t bmm150_init(struct bmm150_dev *dev)
     int8_t rslt;
     uint8_t chip_id = 0;
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
+    /* Power up the sensor from suspend to sleep mode */
+    rslt = set_power_control_bit(BMM150_POWER_CNTRL_ENABLE, dev);
 
-    /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        /* Power up the sensor from suspend to sleep mode */
-        rslt = set_power_control_bit(BMM150_POWER_CNTRL_ENABLE, dev);
+        /* Start-up time delay of 3ms */
+        dev->delay_us(BMM150_START_UP_TIME, dev->intf_ptr);
 
-        /* Start-up time delay of 3ms*/
-        dev->delay_ms(BMM150_START_UP_TIME);
+        /* Chip ID of the sensor is read */
+        rslt = bmm150_get_regs(BMM150_REG_CHIP_ID, &chip_id, 1, dev);
+
+        /* Proceed if everything is fine until now */
         if (rslt == BMM150_OK)
         {
-            /* Chip ID of the sensor is read */
-            rslt = bmm150_get_regs(BMM150_CHIP_ID_ADDR, &chip_id, 1, dev);
-
-            /* Proceed if everything is fine until now */
-            if (rslt == BMM150_OK)
+            /* Check for chip id validity */
+            if (chip_id == BMM150_CHIP_ID)
             {
-                /* Check for chip id validity */
-                if (chip_id == BMM150_CHIP_ID)
-                {
-                    dev->chip_id = chip_id;
+                dev->chip_id = chip_id;
 
-                    /* Function to update trim values */
-                    rslt = read_trim_registers(dev);
-                }
-                else
-                {
-                    rslt = BMM150_E_DEV_NOT_FOUND;
-                }
+                /* Function to update trim values */
+                rslt = read_trim_registers(dev);
             }
         }
     }
@@ -562,11 +604,11 @@ int8_t bmm150_init(struct bmm150_dev *dev)
  * @brief This API writes the given data to the register address
  * of the sensor.
  */
-int8_t bmm150_set_regs(uint8_t reg_addr, uint8_t *reg_data, uint8_t len, const struct bmm150_dev *dev)
+int8_t bmm150_set_regs(uint8_t reg_addr, const uint8_t *reg_data, uint32_t len, struct bmm150_dev *dev)
 {
     int8_t rslt;
 
-    /* Check for null pointer in the device structure*/
+    /* Check for null pointer in the device structure */
     rslt = null_ptr_check(dev);
 
     /* Proceed if null check is fine */
@@ -575,8 +617,9 @@ int8_t bmm150_set_regs(uint8_t reg_addr, uint8_t *reg_data, uint8_t len, const s
         /* Write the data to the reg_addr */
 
         /* SPI write requires to set The MSB of reg_addr as 0
-         * but in default the MSB is always 0 */
-        rslt = dev->write(dev->dev_id, reg_addr, reg_data, len);
+         * but in default the MSB is always 0
+         */
+        dev->intf_rslt = dev->write(reg_addr, reg_data, len, dev->intf_ptr);
     }
     else
     {
@@ -589,11 +632,11 @@ int8_t bmm150_set_regs(uint8_t reg_addr, uint8_t *reg_data, uint8_t len, const s
 /*!
  * @brief This API reads the data from the given register address of the sensor.
  */
-int8_t bmm150_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint8_t len, const struct bmm150_dev *dev)
+int8_t bmm150_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, struct bmm150_dev *dev)
 {
     int8_t rslt;
 
-    /* Check for null pointer in the device structure*/
+    /* Check for null pointer in the device structure */
     rslt = null_ptr_check(dev);
 
     /* Proceed if null check is fine */
@@ -606,7 +649,7 @@ int8_t bmm150_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint8_t len, const s
         }
 
         /* Read the data from the reg_addr */
-        rslt = dev->read(dev->dev_id, reg_addr, reg_data, len);
+        dev->intf_rslt = dev->read(reg_addr, reg_data, len, dev->intf_ptr);
     }
     else
     {
@@ -620,24 +663,18 @@ int8_t bmm150_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint8_t len, const s
  * @brief This API is used to perform soft-reset of the sensor
  * where all the registers are reset to their default values except 0x4B.
  */
-int8_t bmm150_soft_reset(const struct bmm150_dev *dev)
+int8_t bmm150_soft_reset(struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t reg_data;
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
+    rslt = bmm150_get_regs(BMM150_REG_POWER_CONTROL, &reg_data, 1, dev);
 
-    /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        rslt = bmm150_get_regs(BMM150_POWER_CONTROL_ADDR, &reg_data, 1, dev);
-        if (rslt == BMM150_OK)
-        {
-            reg_data = reg_data | BMM150_SET_SOFT_RESET;
-            rslt = bmm150_set_regs(BMM150_POWER_CONTROL_ADDR, &reg_data, 1, dev);
-            dev->delay_ms(BMM150_SOFT_RESET_DELAY);
-        }
+        reg_data = reg_data | BMM150_SET_SOFT_RESET;
+        rslt = bmm150_set_regs(BMM150_REG_POWER_CONTROL, &reg_data, 1, dev);
+        dev->delay_us(BMM150_DELAY_SOFT_RESET, dev->intf_ptr);
     }
 
     return rslt;
@@ -646,54 +683,62 @@ int8_t bmm150_soft_reset(const struct bmm150_dev *dev)
 /*!
  * @brief This API is used to set the power mode of the sensor.
  */
-int8_t bmm150_set_op_mode(struct bmm150_dev *dev)
+int8_t bmm150_set_op_mode(const struct bmm150_settings *settings, struct bmm150_dev *dev)
 {
     int8_t rslt;
-    uint8_t pwr_mode = dev->settings.pwr_mode;
+    uint8_t pwr_mode;
 
-    /* Check for null pointer in the device structure*/
+    /* Check for null pointer in the device structure */
     rslt = null_ptr_check(dev);
 
     /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
+        pwr_mode = settings->pwr_mode;
+
         /* Select the power mode to set */
         switch (pwr_mode)
         {
-            case BMM150_NORMAL_MODE:
+            case BMM150_POWERMODE_NORMAL:
 
                 /* If the sensor is in suspend mode
-                 * put the device to sleep mode */
+                 * put the device to sleep mode
+                 */
                 rslt = suspend_to_sleep_mode(dev);
                 if (rslt == BMM150_OK)
                 {
                     /* write the op mode */
                     rslt = write_op_mode(pwr_mode, dev);
                 }
+
                 break;
-            case BMM150_FORCED_MODE:
+            case BMM150_POWERMODE_FORCED:
 
                 /* If the sensor is in suspend mode
-                 * put the device to sleep mode */
+                 * put the device to sleep mode
+                 */
                 rslt = suspend_to_sleep_mode(dev);
                 if (rslt == BMM150_OK)
                 {
                     /* write the op mode */
                     rslt = write_op_mode(pwr_mode, dev);
                 }
+
                 break;
-            case BMM150_SLEEP_MODE:
+            case BMM150_POWERMODE_SLEEP:
 
                 /* If the sensor is in suspend mode
-                 * put the device to sleep mode */
+                 * put the device to sleep mode
+                 */
                 rslt = suspend_to_sleep_mode(dev);
                 if (rslt == BMM150_OK)
                 {
                     /* write the op mode */
                     rslt = write_op_mode(pwr_mode, dev);
                 }
+
                 break;
-            case BMM150_SUSPEND_MODE:
+            case BMM150_POWERMODE_SUSPEND:
 
                 /* Set the power control bit to zero */
                 rslt = set_power_control_bit(BMM150_POWER_CNTRL_DISABLE, dev);
@@ -710,26 +755,26 @@ int8_t bmm150_set_op_mode(struct bmm150_dev *dev)
 /*!
  * @brief This API is used to get the power mode of the sensor.
  */
-int8_t bmm150_get_op_mode(uint8_t *op_mode, const struct bmm150_dev *dev)
+int8_t bmm150_get_op_mode(uint8_t *op_mode, struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t reg_data;
 
-    /* Check for null pointer in the device structure*/
+    /* Check for null pointer in the device structure */
     rslt = null_ptr_check(dev);
 
     /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        if (dev->settings.pwr_cntrl_bit == BMM150_POWER_CNTRL_DISABLE)
+        if (dev->pwr_cntrl_bit == BMM150_POWER_CNTRL_DISABLE)
         {
-            /* Power mode set is suspend mode*/
-            *op_mode = BMM150_SUSPEND_MODE;
+            /* Power mode set is suspend mode */
+            *op_mode = BMM150_POWERMODE_SUSPEND;
         }
         else
         {
-            /*Power mode set is stored in the op_mode */
-            rslt = bmm150_get_regs(BMM150_OP_MODE_ADDR, &reg_data, 1, dev);
+            /* Power mode set is stored in the op_mode */
+            rslt = bmm150_get_regs(BMM150_REG_OP_MODE, &reg_data, 1, dev);
             *op_mode = BMM150_GET_BITS(reg_data, BMM150_OP_MODE);
         }
     }
@@ -740,55 +785,60 @@ int8_t bmm150_get_op_mode(uint8_t *op_mode, const struct bmm150_dev *dev)
 /*!
  * @brief This API is used to set the preset mode of the sensor.
  */
-int8_t bmm150_set_presetmode(struct bmm150_dev *dev)
+int8_t bmm150_set_presetmode(struct bmm150_settings *settings, struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t preset_mode;
 
-    /* Check for null pointer in the device structure*/
+    /* Check for null pointer in the device structure */
     rslt = null_ptr_check(dev);
 
     /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        preset_mode = dev->settings.preset_mode;
+        preset_mode = settings->preset_mode;
+
         switch (preset_mode)
         {
             case BMM150_PRESETMODE_LOWPOWER:
 
                 /* Set the data rate x,y,z repetition
-                 * for Low Power mode */
-                dev->settings.data_rate = BMM150_DATA_RATE_10HZ;
-                dev->settings.xy_rep = BMM150_LOWPOWER_REPXY;
-                dev->settings.z_rep = BMM150_LOWPOWER_REPZ;
-                rslt = set_odr_xyz_rep(dev);
+                 * for Low Power mode
+                 */
+                settings->data_rate = BMM150_DATA_RATE_10HZ;
+                settings->xy_rep = BMM150_REPXY_LOWPOWER;
+                settings->z_rep = BMM150_REPZ_LOWPOWER;
+                rslt = set_odr_xyz_rep(settings, dev);
                 break;
             case BMM150_PRESETMODE_REGULAR:
 
                 /* Set the data rate x,y,z repetition
-                 * for Regular mode */
-                dev->settings.data_rate = BMM150_DATA_RATE_10HZ;
-                dev->settings.xy_rep = BMM150_REGULAR_REPXY;
-                dev->settings.z_rep = BMM150_REGULAR_REPZ;
-                rslt = set_odr_xyz_rep(dev);
+                 * for Regular mode
+                 */
+                settings->data_rate = BMM150_DATA_RATE_10HZ;
+                settings->xy_rep = BMM150_REPXY_REGULAR;
+                settings->z_rep = BMM150_REPZ_REGULAR;
+                rslt = set_odr_xyz_rep(settings, dev);
                 break;
             case BMM150_PRESETMODE_HIGHACCURACY:
 
                 /* Set the data rate x,y,z repetition
-                 * for High Accuracy mode */
-                dev->settings.data_rate = BMM150_DATA_RATE_20HZ;
-                dev->settings.xy_rep = BMM150_HIGHACCURACY_REPXY;
-                dev->settings.z_rep = BMM150_HIGHACCURACY_REPZ;
-                rslt = set_odr_xyz_rep(dev);
+                 * for High Accuracy mode *
+                 */
+                settings->data_rate = BMM150_DATA_RATE_20HZ;
+                settings->xy_rep = BMM150_REPXY_HIGHACCURACY;
+                settings->z_rep = BMM150_REPZ_HIGHACCURACY;
+                rslt = set_odr_xyz_rep(settings, dev);
                 break;
             case BMM150_PRESETMODE_ENHANCED:
 
                 /* Set the data rate x,y,z repetition
-                 * for Enhanced Accuracy mode */
-                dev->settings.data_rate = BMM150_DATA_RATE_10HZ;
-                dev->settings.xy_rep = BMM150_ENHANCED_REPXY;
-                dev->settings.z_rep = BMM150_ENHANCED_REPZ;
-                rslt = set_odr_xyz_rep(dev);
+                 * for Enhanced Accuracy mode
+                 */
+                settings->data_rate = BMM150_DATA_RATE_10HZ;
+                settings->xy_rep = BMM150_REPXY_ENHANCED;
+                settings->z_rep = BMM150_REPZ_ENHANCED;
+                rslt = set_odr_xyz_rep(settings, dev);
                 break;
             default:
                 rslt = BMM150_E_INVALID_CONFIG;
@@ -803,11 +853,13 @@ int8_t bmm150_set_presetmode(struct bmm150_dev *dev)
  * @brief This API sets the sensor settings based on the desired_settings
  * and the dev structure configuration
  */
-int8_t bmm150_set_sensor_settings(uint16_t desired_settings, const struct bmm150_dev *dev)
+int8_t bmm150_set_sensor_settings(uint16_t desired_settings,
+                                  const struct bmm150_settings *settings,
+                                  struct bmm150_dev *dev)
 {
     int8_t rslt;
 
-    /* Check for null pointer in the device structure*/
+    /* Check for null pointer in the device structure */
     rslt = null_ptr_check(dev);
 
     /* Proceed if null check is fine */
@@ -815,23 +867,26 @@ int8_t bmm150_set_sensor_settings(uint16_t desired_settings, const struct bmm150
     {
         if (are_settings_changed(MODE_SETTING_SEL, desired_settings))
         {
-            /* ODR, Control measurement, XY,Z repetition values*/
-            rslt = mode_settings(desired_settings, dev);
+            /* ODR, Control measurement, XY,Z repetition values */
+            rslt = mode_settings(desired_settings, settings, dev);
         }
+
         if ((!rslt) && are_settings_changed(INTERRUPT_PIN_SETTING_SEL, desired_settings))
         {
             /* Interrupt pin settings */
-            rslt = interrupt_pin_settings(desired_settings, dev);
+            rslt = interrupt_pin_settings(desired_settings, settings, dev);
         }
+
         if ((!rslt) && are_settings_changed(INTERRUPT_CONFIG_SEL, desired_settings))
         {
             /* Interrupt configuration settings */
-            rslt = interrupt_config(desired_settings, dev);
+            rslt = interrupt_config(desired_settings, settings, dev);
         }
+
         if ((!rslt) && are_settings_changed(INTERRUPT_THRESHOLD_CONFIG_SEL, desired_settings))
         {
             /* Interrupt threshold settings */
-            rslt = interrupt_threshold_settings(desired_settings, dev);
+            rslt = interrupt_threshold_settings(desired_settings, settings, dev);
         }
     }
 
@@ -841,24 +896,18 @@ int8_t bmm150_set_sensor_settings(uint16_t desired_settings, const struct bmm150
 /*!
  * @brief This API gets the sensor settings and updates the dev structure
  */
-int8_t bmm150_get_sensor_settings(struct bmm150_dev *dev)
+int8_t bmm150_get_sensor_settings(struct bmm150_settings *settings, struct bmm150_dev *dev)
 {
     int8_t rslt;
-    uint8_t setting[BMM150_SETTING_DATA_LEN] = { 0 };
+    uint8_t setting[BMM150_LEN_SETTING_DATA] = { 0 };
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
+    /* Read the entire sensor settings */
+    rslt = bmm150_get_regs(BMM150_REG_POWER_CONTROL, setting, BMM150_LEN_SETTING_DATA, dev);
 
-    /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        /*Read the entire sensor settings */
-        rslt = bmm150_get_regs(BMM150_POWER_CONTROL_ADDR, setting, BMM150_SETTING_DATA_LEN, dev);
-        if (rslt == BMM150_OK)
-        {
-            /*Parse and store the settings */
-            parse_setting(setting, dev);
-        }
+        /* Parse and store the settings */
+        parse_setting(setting, settings);
     }
 
     return rslt;
@@ -869,66 +918,60 @@ int8_t bmm150_get_sensor_settings(struct bmm150_dev *dev)
  * 0x42 to 0x49 and update the dev structure with the
  * compensated mag data in micro-tesla.
  */
-int8_t bmm150_read_mag_data(struct bmm150_dev *dev)
+int8_t bmm150_read_mag_data(struct bmm150_mag_data *mag_data, struct bmm150_dev *dev)
 {
     int8_t rslt;
     int16_t msb_data;
-    uint8_t reg_data[BMM150_XYZR_DATA_LEN] = { 0 };
+    uint8_t reg_data[BMM150_LEN_XYZR_DATA] = { 0 };
     struct bmm150_raw_mag_data raw_mag_data;
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
+    /* Read the mag data registers */
+    rslt = bmm150_get_regs(BMM150_REG_DATA_X_LSB, reg_data, BMM150_LEN_XYZR_DATA, dev);
 
-    /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        /*Read the mag data registers */
-        rslt = bmm150_get_regs(BMM150_DATA_X_LSB, reg_data, BMM150_XYZR_DATA_LEN, dev);
-        if (rslt == BMM150_OK)
-        {
-            /* Mag X axis data */
-            reg_data[0] = BMM150_GET_BITS(reg_data[0], BMM150_DATA_X);
+        /* Mag X axis data */
+        reg_data[0] = BMM150_GET_BITS(reg_data[0], BMM150_DATA_X);
 
-            /* Shift the MSB data to left by 5 bits */
-            /* Multiply by 32 to get the shift left by 5 value */
-            msb_data = ((int16_t)((int8_t)reg_data[1])) * 32;
+        /* Shift the MSB data to left by 5 bits */
+        /* Multiply by 32 to get the shift left by 5 value */
+        msb_data = ((int16_t)((int8_t)reg_data[1])) * 32;
 
-            /* Raw mag X axis data */
-            raw_mag_data.raw_datax = (int16_t)(msb_data | reg_data[0]);
+        /* Raw mag X axis data */
+        raw_mag_data.raw_datax = (int16_t)(msb_data | reg_data[0]);
 
-            /* Mag Y axis data */
-            reg_data[2] = BMM150_GET_BITS(reg_data[2], BMM150_DATA_Y);
+        /* Mag Y axis data */
+        reg_data[2] = BMM150_GET_BITS(reg_data[2], BMM150_DATA_Y);
 
-            /* Shift the MSB data to left by 5 bits */
-            /* Multiply by 32 to get the shift left by 5 value */
-            msb_data = ((int16_t)((int8_t)reg_data[3])) * 32;
+        /* Shift the MSB data to left by 5 bits */
+        /* Multiply by 32 to get the shift left by 5 value */
+        msb_data = ((int16_t)((int8_t)reg_data[3])) * 32;
 
-            /* Raw mag Y axis data */
-            raw_mag_data.raw_datay = (int16_t)(msb_data | reg_data[2]);
+        /* Raw mag Y axis data */
+        raw_mag_data.raw_datay = (int16_t)(msb_data | reg_data[2]);
 
-            /* Mag Z axis data */
-            reg_data[4] = BMM150_GET_BITS(reg_data[4], BMM150_DATA_Z);
+        /* Mag Z axis data */
+        reg_data[4] = BMM150_GET_BITS(reg_data[4], BMM150_DATA_Z);
 
-            /* Shift the MSB data to left by 7 bits */
-            /* Multiply by 128 to get the shift left by 7 value */
-            msb_data = ((int16_t)((int8_t)reg_data[5])) * 128;
+        /* Shift the MSB data to left by 7 bits */
+        /* Multiply by 128 to get the shift left by 7 value */
+        msb_data = ((int16_t)((int8_t)reg_data[5])) * 128;
 
-            /* Raw mag Z axis data */
-            raw_mag_data.raw_dataz = (int16_t)(msb_data | reg_data[4]);
+        /* Raw mag Z axis data */
+        raw_mag_data.raw_dataz = (int16_t)(msb_data | reg_data[4]);
 
-            /* Mag R-HALL data */
-            reg_data[6] = BMM150_GET_BITS(reg_data[6], BMM150_DATA_RHALL);
-            raw_mag_data.raw_data_r = (uint16_t)(((uint16_t)reg_data[7] << 6) | reg_data[6]);
+        /* Mag R-HALL data */
+        reg_data[6] = BMM150_GET_BITS(reg_data[6], BMM150_DATA_RHALL);
+        raw_mag_data.raw_data_r = (uint16_t)(((uint16_t)reg_data[7] << 6) | reg_data[6]);
 
-            /* Compensated Mag X data in int16_t format */
-            dev->data.x = compensate_x(raw_mag_data.raw_datax, raw_mag_data.raw_data_r, dev);
+        /* Compensated Mag X data in int16_t format */
+        mag_data->x = compensate_x(raw_mag_data.raw_datax, raw_mag_data.raw_data_r, dev);
 
-            /* Compensated Mag Y data in int16_t format */
-            dev->data.y = compensate_y(raw_mag_data.raw_datay, raw_mag_data.raw_data_r, dev);
+        /* Compensated Mag Y data in int16_t format */
+        mag_data->y = compensate_y(raw_mag_data.raw_datay, raw_mag_data.raw_data_r, dev);
 
-            /* Compensated Mag Z data in int16_t format */
-            dev->data.z = compensate_z(raw_mag_data.raw_dataz, raw_mag_data.raw_data_r, dev);
-        }
+        /* Compensated Mag Z data in int16_t format */
+        mag_data->z = compensate_z(raw_mag_data.raw_dataz, raw_mag_data.raw_data_r, dev);
     }
 
     return rslt;
@@ -942,8 +985,9 @@ int8_t bmm150_perform_self_test(uint8_t self_test_mode, struct bmm150_dev *dev)
 {
     int8_t rslt;
     int8_t self_test_rslt = 0;
+    struct bmm150_settings settings;
 
-    /* Check for null pointer in the device structure*/
+    /* Check for null pointer in the device structure */
     rslt = null_ptr_check(dev);
 
     /* Proceed if null check is fine */
@@ -951,18 +995,20 @@ int8_t bmm150_perform_self_test(uint8_t self_test_mode, struct bmm150_dev *dev)
     {
         switch (self_test_mode)
         {
-            case BMM150_NORMAL_SELF_TEST:
+            case BMM150_SELF_TEST_NORMAL:
 
                 /* Set the sensor in sleep mode */
-                dev->settings.pwr_mode = BMM150_SLEEP_MODE;
-                rslt = bmm150_set_op_mode(dev);
+                settings.pwr_mode = BMM150_POWERMODE_SLEEP;
+                rslt = bmm150_set_op_mode(&settings, dev);
+
                 if (rslt == BMM150_OK)
                 {
                     /* Perform the normal self test */
                     rslt = perform_normal_self_test(dev);
                 }
+
                 break;
-            case BMM150_ADVANCED_SELF_TEST:
+            case BMM150_SELF_TEST_ADVANCED:
 
                 /* Perform the advanced self test */
                 rslt = perform_adv_self_test(dev);
@@ -983,6 +1029,7 @@ int8_t bmm150_perform_self_test(uint8_t self_test_mode, struct bmm150_dev *dev)
                     /* Restore self_test_rslt as return value */
                     rslt = self_test_rslt;
                 }
+
                 break;
             default:
                 rslt = BMM150_E_INVALID_CONFIG;
@@ -1003,26 +1050,21 @@ int8_t bmm150_get_interrupt_status(struct bmm150_dev *dev)
     uint8_t interrupt_status;
     uint8_t data_ready_status;
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
+    /* Read the data ready status from the register 0x48 */
+    rslt = bmm150_get_regs(BMM150_REG_DATA_READY_STATUS, &data_ready_status, 1, dev);
 
-    /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        /* Read the data ready status from the register 0x48 */
-        rslt = bmm150_get_regs(BMM150_DATA_READY_STATUS, &data_ready_status, 1, dev);
+        /* Read the interrupt status from the register 0x50 */
+        rslt = bmm150_get_regs(BMM150_REG_INTERRUPT_STATUS, &interrupt_status, 1, dev);
+
         if (rslt == BMM150_OK)
         {
-            /* Read the interrupt status from the register 0x50 */
-            rslt = bmm150_get_regs(BMM150_INTERRUPT_STATUS, &interrupt_status, 1, dev);
-            if (rslt == BMM150_OK)
-            {
-                /* Mask and store the data ready status bit*/
-                data_ready_status = BMM150_GET_BITS_POS_0(data_ready_status, BMM150_DRDY_STATUS);
+            /* Mask and store the data ready status bit */
+            data_ready_status = BMM150_GET_BITS_POS_0(data_ready_status, BMM150_DRDY_STATUS);
 
-                /* store the entire interrupt status in dev */
-                dev->int_status = (data_ready_status << 8) | interrupt_status;
-            }
+            /* Store the entire interrupt status in dev */
+            dev->int_status = (data_ready_status << 8) | interrupt_status;
         }
     }
 
@@ -1035,13 +1077,13 @@ int8_t bmm150_get_interrupt_status(struct bmm150_dev *dev)
 /*!
  * @brief This API is used to compensate the raw mag data
  */
-int8_t bmm150_aux_mag_data(uint8_t *aux_data, struct bmm150_dev *dev)
+int8_t bmm150_aux_mag_data(uint8_t *aux_data, struct bmm150_mag_data *mag_data, const struct bmm150_dev *dev)
 {
     int8_t rslt;
     int16_t msb_data;
     struct bmm150_raw_mag_data raw_mag_data;
 
-    /* Check for null pointer in the device structure*/
+    /* Check for null pointer in the device structure */
     rslt = null_ptr_check(dev);
 
     /* Proceed if null check is fine */
@@ -1082,13 +1124,13 @@ int8_t bmm150_aux_mag_data(uint8_t *aux_data, struct bmm150_dev *dev)
         raw_mag_data.raw_data_r = (uint16_t)(((uint16_t)aux_data[7] << 6) | aux_data[6]);
 
         /* Compensated Mag X data in int16_t format */
-        dev->data.x = compensate_x(raw_mag_data.raw_datax, raw_mag_data.raw_data_r, dev);
+        mag_data->x = compensate_x(raw_mag_data.raw_datax, raw_mag_data.raw_data_r, dev);
 
         /* Compensated Mag Y data in int16_t format */
-        dev->data.y = compensate_y(raw_mag_data.raw_datay, raw_mag_data.raw_data_r, dev);
+        mag_data->y = compensate_y(raw_mag_data.raw_datay, raw_mag_data.raw_data_r, dev);
 
         /* Compensated Mag Z data in int16_t format */
-        dev->data.z = compensate_z(raw_mag_data.raw_dataz, raw_mag_data.raw_data_r, dev);
+        mag_data->z = compensate_z(raw_mag_data.raw_dataz, raw_mag_data.raw_data_r, dev);
     }
 
     return rslt;
@@ -1105,7 +1147,8 @@ static int8_t null_ptr_check(const struct bmm150_dev *dev)
 {
     int8_t rslt;
 
-    if ((dev == NULL) || (dev->read == NULL) || (dev->write == NULL) || (dev->delay_ms == NULL))
+    if ((dev == NULL) || (dev->read == NULL) || (dev->write == NULL) || (dev->delay_us == NULL) ||
+        (dev->intf_ptr == NULL))
     {
         /* Device structure pointer is not valid */
         rslt = BMM150_E_NULL_PTR;
@@ -1127,27 +1170,22 @@ static int8_t set_power_control_bit(uint8_t pwrcntrl_bit, struct bmm150_dev *dev
     int8_t rslt;
     uint8_t reg_data = 0;
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
+    /* Power control register 0x4B is read */
+    rslt = bmm150_get_regs(BMM150_REG_POWER_CONTROL, &reg_data, 1, dev);
 
-    /* Proceed if null check is fine */
+    /* Proceed if everything is fine until now */
     if (rslt == BMM150_OK)
     {
-        /* Power control register 0x4B is read */
-        rslt = bmm150_get_regs(BMM150_POWER_CONTROL_ADDR, &reg_data, 1, dev);
+        /* Sets the value of power control bit */
+        reg_data = BMM150_SET_BITS_POS_0(reg_data, BMM150_PWR_CNTRL, pwrcntrl_bit);
+        rslt = bmm150_set_regs(BMM150_REG_POWER_CONTROL, &reg_data, 1, dev);
 
-        /* Proceed if everything is fine until now */
         if (rslt == BMM150_OK)
         {
-            /* Sets the value of power control bit */
-            reg_data = BMM150_SET_BITS_POS_0(reg_data, BMM150_PWR_CNTRL, pwrcntrl_bit);
-            rslt = bmm150_set_regs(BMM150_POWER_CONTROL_ADDR, &reg_data, 1, dev);
-            if (rslt == BMM150_OK)
-            {
-                /*Store the power control bit
-                 * value in dev structure*/
-                dev->settings.pwr_cntrl_bit = pwrcntrl_bit;
-            }
+            /* Store the power control bit
+             * value in dev structure
+             */
+            dev->pwr_cntrl_bit = pwrcntrl_bit;
         }
     }
 
@@ -1168,16 +1206,20 @@ static int8_t read_trim_registers(struct bmm150_dev *dev)
 
     /* Trim register value is read */
     rslt = bmm150_get_regs(BMM150_DIG_X1, trim_x1y1, 2, dev);
+
     if (rslt == BMM150_OK)
     {
         rslt = bmm150_get_regs(BMM150_DIG_Z4_LSB, trim_xyz_data, 4, dev);
+
         if (rslt == BMM150_OK)
         {
             rslt = bmm150_get_regs(BMM150_DIG_Z2_LSB, trim_xy1xy2, 10, dev);
+
             if (rslt == BMM150_OK)
             {
                 /* Trim data which is read is updated
-                 * in the device structure */
+                 * in the device structure
+                 */
                 dev->trim_data.dig_x1 = (int8_t)trim_x1y1[0];
                 dev->trim_data.dig_y1 = (int8_t)trim_x1y1[1];
                 dev->trim_data.dig_x2 = (int8_t)trim_xyz_data[2];
@@ -1205,25 +1247,19 @@ static int8_t read_trim_registers(struct bmm150_dev *dev)
  * @brief This internal API writes the op_mode value in the Opmode bits
  * (bits 1 and 2) of 0x4C register.
  */
-static int8_t write_op_mode(uint8_t op_mode, const struct bmm150_dev *dev)
+static int8_t write_op_mode(uint8_t op_mode, struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t reg_data;
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
+    /* Read the 0x4C register */
+    rslt = bmm150_get_regs(BMM150_REG_OP_MODE, &reg_data, 1, dev);
 
-    /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        /* Read the 0x4C register */
-        rslt = bmm150_get_regs(BMM150_OP_MODE_ADDR, &reg_data, 1, dev);
-        if (rslt == BMM150_OK)
-        {
-            /* Set the op_mode value in Opmode bits of 0x4C */
-            reg_data = BMM150_SET_BITS(reg_data, BMM150_OP_MODE, op_mode);
-            rslt = bmm150_set_regs(BMM150_OP_MODE_ADDR, &reg_data, 1, dev);
-        }
+        /* Set the op_mode value in Opmode bits of 0x4C */
+        reg_data = BMM150_SET_BITS(reg_data, BMM150_OP_MODE, op_mode);
+        rslt = bmm150_set_regs(BMM150_REG_OP_MODE, &reg_data, 1, dev);
     }
 
     return rslt;
@@ -1237,18 +1273,18 @@ static int8_t suspend_to_sleep_mode(struct bmm150_dev *dev)
 {
     int8_t rslt;
 
-    /* Check for null pointer in the device structure*/
+    /* Check for null pointer in the device structure */
     rslt = null_ptr_check(dev);
 
     /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        if (dev->settings.pwr_cntrl_bit == BMM150_POWER_CNTRL_DISABLE)
+        if (dev->pwr_cntrl_bit == BMM150_POWER_CNTRL_DISABLE)
         {
             rslt = set_power_control_bit(BMM150_POWER_CNTRL_ENABLE, dev);
 
-            /* Start-up time delay of 3ms*/
-            dev->delay_ms(BMM150_START_UP_TIME);
+            /* Start-up time delay of 3ms */
+            dev->delay_us(BMM150_START_UP_TIME, dev->intf_ptr);
         }
     }
 
@@ -1258,21 +1294,14 @@ static int8_t suspend_to_sleep_mode(struct bmm150_dev *dev)
 /*!
  * @brief This internal API sets the xy repetition value in the 0x51 register.
  */
-static int8_t set_xy_rep(const struct bmm150_dev *dev)
+static int8_t set_xy_rep(const struct bmm150_settings *settings, struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t rep_xy;
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
-
-    /* Proceed if null check is fine */
-    if (rslt == BMM150_OK)
-    {
-        /* set the xy repetition */
-        rep_xy = dev->settings.xy_rep;
-        rslt = bmm150_set_regs(BMM150_REP_XY_ADDR, &rep_xy, 1, dev);
-    }
+    /* Set the xy repetition */
+    rep_xy = settings->xy_rep;
+    rslt = bmm150_set_regs(BMM150_REG_REP_XY, &rep_xy, 1, dev);
 
     return rslt;
 }
@@ -1280,21 +1309,14 @@ static int8_t set_xy_rep(const struct bmm150_dev *dev)
 /*!
  * @brief This internal API sets the z repetition value in the 0x52 register.
  */
-static int8_t set_z_rep(const struct bmm150_dev *dev)
+static int8_t set_z_rep(const struct bmm150_settings *settings, struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t rep_z;
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
-
-    /* Proceed if null check is fine */
-    if (rslt == BMM150_OK)
-    {
-        /* set the z repetition */
-        rep_z = dev->settings.z_rep;
-        rslt = bmm150_set_regs(BMM150_REP_Z_ADDR, &rep_z, 1, dev);
-    }
+    /* Set the z repetition */
+    rep_z = settings->z_rep;
+    rslt = bmm150_set_regs(BMM150_REG_REP_Z, &rep_z, 1, dev);
 
     return rslt;
 }
@@ -1302,25 +1324,19 @@ static int8_t set_z_rep(const struct bmm150_dev *dev)
 /*!
  * @brief This internal API is used to set the output data rate of the sensor.
  */
-static int8_t set_odr(const struct bmm150_dev *dev)
+static int8_t set_odr(const struct bmm150_settings *settings, struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t reg_data;
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
+    /* Read the 0x4C register */
+    rslt = bmm150_get_regs(BMM150_REG_OP_MODE, &reg_data, 1, dev);
 
-    /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        /*Read the 0x4C register */
-        rslt = bmm150_get_regs(BMM150_OP_MODE_ADDR, &reg_data, 1, dev);
-        if (rslt == BMM150_OK)
-        {
-            /*Set the ODR value */
-            reg_data = BMM150_SET_BITS(reg_data, BMM150_ODR, dev->settings.data_rate);
-            rslt = bmm150_set_regs(BMM150_OP_MODE_ADDR, &reg_data, 1, dev);
-        }
+        /* Set the ODR value */
+        reg_data = BMM150_SET_BITS(reg_data, BMM150_ODR, settings->data_rate);
+        rslt = bmm150_set_regs(BMM150_REG_OP_MODE, &reg_data, 1, dev);
     }
 
     return rslt;
@@ -1329,20 +1345,22 @@ static int8_t set_odr(const struct bmm150_dev *dev)
 /*!
  * @brief This internal API sets the preset mode ODR and repetition settings.
  */
-static int8_t set_odr_xyz_rep(const struct bmm150_dev *dev)
+static int8_t set_odr_xyz_rep(const struct bmm150_settings *settings, struct bmm150_dev *dev)
 {
     int8_t rslt;
 
     /* Set the ODR */
-    rslt = set_odr(dev);
+    rslt = set_odr(settings, dev);
+
     if (rslt == BMM150_OK)
     {
         /* Set the XY-repetitions number */
-        rslt = set_xy_rep(dev);
+        rslt = set_xy_rep(settings, dev);
+
         if (rslt == BMM150_OK)
         {
             /* Set the Z-repetitions number */
-            rslt = set_z_rep(dev);
+            rslt = set_z_rep(settings, dev);
         }
     }
 
@@ -1353,24 +1371,18 @@ static int8_t set_odr_xyz_rep(const struct bmm150_dev *dev)
  * @brief This internal API is used to enable or disable the magnetic
  * measurement of x,y,z axes based on the value of xyz_axes_control.
  */
-static int8_t set_control_measurement_xyz(const struct bmm150_dev *dev)
+static int8_t set_control_measurement_xyz(const struct bmm150_settings *settings, struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t reg_data;
 
-    /* Check for null pointer in the device structure*/
-    rslt = null_ptr_check(dev);
+    rslt = bmm150_get_regs(BMM150_REG_AXES_ENABLE, &reg_data, 1, dev);
 
-    /* Proceed if null check is fine */
     if (rslt == BMM150_OK)
     {
-        rslt = bmm150_get_regs(BMM150_AXES_ENABLE_ADDR, &reg_data, 1, dev);
-        if (rslt == BMM150_OK)
-        {
-            /* Set the axes to be enabled/disabled*/
-            reg_data = BMM150_SET_BITS(reg_data, BMM150_CONTROL_MEASURE, dev->settings.xyz_axes_control);
-            rslt = bmm150_set_regs(BMM150_AXES_ENABLE_ADDR, &reg_data, 1, dev);
-        }
+        /* Set the axes to be enabled/disabled */
+        reg_data = BMM150_SET_BITS(reg_data, BMM150_CONTROL_MEASURE, settings->xyz_axes_control);
+        rslt = bmm150_set_regs(BMM150_REG_AXES_ENABLE, &reg_data, 1, dev);
     }
 
     return rslt;
@@ -1382,17 +1394,17 @@ static int8_t set_control_measurement_xyz(const struct bmm150_dev *dev)
  */
 static uint8_t are_settings_changed(uint16_t sub_settings, uint16_t desired_settings)
 {
-    uint8_t settings_changed = FALSE;
+    uint8_t settings_changed;
 
     if (sub_settings & desired_settings)
     {
         /* User wants to modify this particular settings */
-        settings_changed = TRUE;
+        settings_changed = BMM150_TRUE;
     }
     else
     {
         /* User don't want to modify this particular settings */
-        settings_changed = FALSE;
+        settings_changed = BMM150_FALSE;
     }
 
     return settings_changed;
@@ -1402,29 +1414,32 @@ static uint8_t are_settings_changed(uint16_t sub_settings, uint16_t desired_sett
  * @brief This API sets the ODR , measurement axes control ,
  * repetition values of xy,z.
  */
-static int8_t mode_settings(uint16_t desired_settings, const struct bmm150_dev *dev)
+static int8_t mode_settings(uint16_t desired_settings, const struct bmm150_settings *settings, struct bmm150_dev *dev)
 {
     int8_t rslt = BMM150_E_INVALID_CONFIG;
 
-    if (desired_settings & BMM150_DATA_RATE_SEL)
+    if (desired_settings & BMM150_SEL_DATA_RATE)
     {
         /* Sets the ODR */
-        rslt = set_odr(dev);
+        rslt = set_odr(settings, dev);
     }
-    if (desired_settings & BMM150_CONTROL_MEASURE_SEL)
+
+    if (desired_settings & BMM150_SEL_CONTROL_MEASURE)
     {
         /* Enables/Disables the control measurement axes */
-        rslt = set_control_measurement_xyz(dev);
+        rslt = set_control_measurement_xyz(settings, dev);
     }
-    if (desired_settings & BMM150_XY_REP_SEL)
+
+    if (desired_settings & BMM150_SEL_XY_REP)
     {
         /* Sets the XY repetition */
-        rslt = set_xy_rep(dev);
+        rslt = set_xy_rep(settings, dev);
     }
-    if (desired_settings & BMM150_Z_REP_SEL)
+
+    if (desired_settings & BMM150_SEL_Z_REP)
     {
         /* Sets the Z repetition */
-        rslt = set_z_rep(dev);
+        rslt = set_z_rep(settings, dev);
     }
 
     return rslt;
@@ -1434,25 +1449,26 @@ static int8_t mode_settings(uint16_t desired_settings, const struct bmm150_dev *
  * @brief This internal API is used to parse and store the sensor
  * settings in the device structure
  */
-static void parse_setting(const uint8_t *reg_data, struct bmm150_dev *dev)
+static void parse_setting(const uint8_t *reg_data, struct bmm150_settings *settings)
 {
     /* Parse all the w/r registers and update the
-     * current sensor settings in the dev structure*/
-    dev->settings.z_rep = reg_data[7];
-    dev->settings.xy_rep = reg_data[6];
-    dev->settings.int_settings.high_threshold = reg_data[5];
-    dev->settings.int_settings.low_threshold = reg_data[4];
-    dev->settings.xyz_axes_control = BMM150_GET_BITS(reg_data[3], BMM150_CONTROL_MEASURE);
-    dev->settings.int_settings.drdy_pin_en = BMM150_GET_BITS(reg_data[3], BMM150_DRDY_EN);
-    dev->settings.int_settings.int_pin_en = BMM150_GET_BITS(reg_data[3], BMM150_INT_PIN_EN);
-    dev->settings.int_settings.drdy_polarity = BMM150_GET_BITS(reg_data[3], BMM150_DRDY_POLARITY);
-    dev->settings.int_settings.int_latch = BMM150_GET_BITS(reg_data[3], BMM150_INT_LATCH);
-    dev->settings.int_settings.int_polarity = BMM150_GET_BITS_POS_0(reg_data[3], BMM150_INT_POLARITY);
-    dev->settings.int_settings.data_overrun_en = BMM150_GET_BITS(reg_data[2], BMM150_DATA_OVERRUN_INT);
-    dev->settings.int_settings.overflow_int_en = BMM150_GET_BITS(reg_data[2], BMM150_OVERFLOW_INT);
-    dev->settings.int_settings.high_int_en = BMM150_GET_BITS(reg_data[2], BMM150_HIGH_THRESHOLD_INT);
-    dev->settings.int_settings.low_int_en = BMM150_GET_BITS_POS_0(reg_data[2], BMM150_LOW_THRESHOLD_INT);
-    dev->settings.data_rate = BMM150_GET_BITS(reg_data[1], BMM150_ODR);
+     * current sensor settings in the dev structure
+     */
+    settings->z_rep = reg_data[7];
+    settings->xy_rep = reg_data[6];
+    settings->int_settings.high_threshold = reg_data[5];
+    settings->int_settings.low_threshold = reg_data[4];
+    settings->xyz_axes_control = BMM150_GET_BITS(reg_data[3], BMM150_CONTROL_MEASURE);
+    settings->int_settings.drdy_pin_en = BMM150_GET_BITS(reg_data[3], BMM150_DRDY_EN);
+    settings->int_settings.int_pin_en = BMM150_GET_BITS(reg_data[3], BMM150_INT_PIN_EN);
+    settings->int_settings.drdy_polarity = BMM150_GET_BITS(reg_data[3], BMM150_DRDY_POLARITY);
+    settings->int_settings.int_latch = BMM150_GET_BITS(reg_data[3], BMM150_INT_LATCH);
+    settings->int_settings.int_polarity = BMM150_GET_BITS_POS_0(reg_data[3], BMM150_INT_POLARITY);
+    settings->int_settings.data_overrun_en = BMM150_GET_BITS(reg_data[2], BMM150_DATA_OVERRUN_INT);
+    settings->int_settings.overflow_int_en = BMM150_GET_BITS(reg_data[2], BMM150_OVERFLOW_INT);
+    settings->int_settings.high_int_en = BMM150_GET_BITS(reg_data[2], BMM150_HIGH_THRESHOLD_INT);
+    settings->int_settings.low_int_en = BMM150_GET_BITS_POS_0(reg_data[2], BMM150_LOW_THRESHOLD_INT);
+    settings->data_rate = BMM150_GET_BITS(reg_data[1], BMM150_ODR);
 }
 
 /*!
@@ -1460,45 +1476,53 @@ static void parse_setting(const uint8_t *reg_data, struct bmm150_dev *dev)
  * corresponding interrupt pins and specify the pin characteristics like the
  * polarity , latch settings for the interrupt pins.
  */
-static int8_t interrupt_pin_settings(uint16_t desired_settings, const struct bmm150_dev *dev)
+static int8_t interrupt_pin_settings(uint16_t desired_settings,
+                                     const struct bmm150_settings *settings,
+                                     struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t reg_data;
     struct bmm150_int_ctrl_settings int_settings;
 
-    rslt = bmm150_get_regs(BMM150_AXES_ENABLE_ADDR, &reg_data, 1, dev);
+    rslt = bmm150_get_regs(BMM150_REG_AXES_ENABLE, &reg_data, 1, dev);
+
     if (rslt == BMM150_OK)
     {
-        int_settings = dev->settings.int_settings;
-        if (desired_settings & BMM150_DRDY_PIN_EN_SEL)
+        int_settings = settings->int_settings;
+        if (desired_settings & BMM150_SEL_DRDY_PIN_EN)
         {
             /* Enables the Data ready interrupt and
-             * maps it to the DRDY pin of the sensor  */
+             * maps it to the DRDY pin of the sensor
+             */
             reg_data = BMM150_SET_BITS(reg_data, BMM150_DRDY_EN, int_settings.drdy_pin_en);
         }
-        if (desired_settings & BMM150_INT_PIN_EN_SEL)
+
+        if (desired_settings & BMM150_SEL_INT_PIN_EN)
         {
             /* Sets interrupt pin enable */
             reg_data = BMM150_SET_BITS(reg_data, BMM150_INT_PIN_EN, int_settings.int_pin_en);
         }
-        if (desired_settings & BMM150_DRDY_POLARITY_SEL)
+
+        if (desired_settings & BMM150_SEL_DRDY_POLARITY)
         {
             /* Sets Data ready pin's polarity */
             reg_data = BMM150_SET_BITS(reg_data, BMM150_DRDY_POLARITY, int_settings.drdy_polarity);
         }
-        if (desired_settings & BMM150_INT_LATCH_SEL)
+
+        if (desired_settings & BMM150_SEL_INT_LATCH)
         {
             /* Sets Interrupt in latched or non-latched mode */
             reg_data = BMM150_SET_BITS(reg_data, BMM150_INT_LATCH, int_settings.int_latch);
         }
-        if (desired_settings & BMM150_INT_POLARITY_SEL)
+
+        if (desired_settings & BMM150_SEL_INT_POLARITY)
         {
             /* Sets Interrupt pin's polarity */
             reg_data = BMM150_SET_BITS_POS_0(reg_data, BMM150_INT_POLARITY, int_settings.int_polarity);
         }
 
         /* Set the interrupt configurations in the 0x4E register */
-        rslt = bmm150_set_regs(BMM150_AXES_ENABLE_ADDR, &reg_data, 1, dev);
+        rslt = bmm150_set_regs(BMM150_REG_AXES_ENABLE, &reg_data, 1, dev);
     }
 
     return rslt;
@@ -1510,39 +1534,44 @@ static int8_t interrupt_pin_settings(uint16_t desired_settings, const struct bmm
  * threshold values set by the user in the High threshold (0x50) and
  * Low threshold (0x4F) registers.
  */
-static int8_t interrupt_config(uint16_t desired_settings, const struct bmm150_dev *dev)
+static int8_t interrupt_config(uint16_t desired_settings, const struct bmm150_settings *settings,
+                               struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t reg_data;
     struct bmm150_int_ctrl_settings int_settings;
 
-    rslt = bmm150_get_regs(BMM150_INT_CONFIG_ADDR, &reg_data, 1, dev);
+    rslt = bmm150_get_regs(BMM150_REG_INT_CONFIG, &reg_data, 1, dev);
+
     if (rslt == BMM150_OK)
     {
-        int_settings = dev->settings.int_settings;
-        if (desired_settings & BMM150_DATA_OVERRUN_INT_SEL)
+        int_settings = settings->int_settings;
+        if (desired_settings & BMM150_SEL_DATA_OVERRUN_INT)
         {
             /* Sets Data overrun interrupt */
             reg_data = BMM150_SET_BITS(reg_data, BMM150_DATA_OVERRUN_INT, int_settings.data_overrun_en);
         }
-        if (desired_settings & BMM150_OVERFLOW_INT_SEL)
+
+        if (desired_settings & BMM150_SEL_OVERFLOW_INT)
         {
             /* Sets Data overflow interrupt */
             reg_data = BMM150_SET_BITS(reg_data, BMM150_OVERFLOW_INT, int_settings.overflow_int_en);
         }
-        if (desired_settings & BMM150_HIGH_THRESHOLD_INT_SEL)
+
+        if (desired_settings & BMM150_SEL_HIGH_THRESHOLD_INT)
         {
             /* Sets high threshold interrupt */
             reg_data = BMM150_SET_BITS(reg_data, BMM150_HIGH_THRESHOLD_INT, int_settings.high_int_en);
         }
-        if (desired_settings & BMM150_LOW_THRESHOLD_INT_SEL)
+
+        if (desired_settings & BMM150_SEL_LOW_THRESHOLD_INT)
         {
             /* Sets low threshold interrupt */
             reg_data = BMM150_SET_BITS_POS_0(reg_data, BMM150_LOW_THRESHOLD_INT, int_settings.low_int_en);
         }
 
         /* Set the interrupt configurations in the 0x4D register */
-        rslt = bmm150_set_regs(BMM150_INT_CONFIG_ADDR, &reg_data, 1, dev);
+        rslt = bmm150_set_regs(BMM150_REG_INT_CONFIG, &reg_data, 1, dev);
     }
 
     return rslt;
@@ -1552,22 +1581,25 @@ static int8_t interrupt_config(uint16_t desired_settings, const struct bmm150_de
  * @brief This API is used to write the user specified High/Low threshold value
  * as a reference to generate the high/low threshold interrupt.
  */
-static int8_t interrupt_threshold_settings(uint16_t desired_settings, const struct bmm150_dev *dev)
+static int8_t interrupt_threshold_settings(uint16_t desired_settings,
+                                           const struct bmm150_settings *settings,
+                                           struct bmm150_dev *dev)
 {
     int8_t rslt = BMM150_E_INVALID_CONFIG;
     uint8_t reg_data;
 
-    if (desired_settings & BMM150_LOW_THRESHOLD_SETTING_SEL)
+    if (desired_settings & BMM150_SEL_LOW_THRESHOLD_SETTING)
     {
         /* Sets the Low threshold value to trigger interrupt */
-        reg_data = dev->settings.int_settings.low_threshold;
-        rslt = bmm150_set_regs(BMM150_LOW_THRESHOLD_ADDR, &reg_data, 1, dev);
+        reg_data = settings->int_settings.low_threshold;
+        rslt = bmm150_set_regs(BMM150_REG_LOW_THRESHOLD, &reg_data, 1, dev);
     }
-    if (desired_settings & BMM150_HIGH_THRESHOLD_SETTING_SEL)
+
+    if (desired_settings & BMM150_SEL_HIGH_THRESHOLD_SETTING)
     {
         /* Sets the High threshold value to trigger interrupt */
-        reg_data = dev->settings.int_settings.high_threshold;
-        rslt = bmm150_set_regs(BMM150_HIGH_THRESHOLD_ADDR, &reg_data, 1, dev);
+        reg_data = settings->int_settings.high_threshold;
+        rslt = bmm150_set_regs(BMM150_REG_HIGH_THRESHOLD, &reg_data, 1, dev);
     }
 
     return rslt;
@@ -1589,9 +1621,9 @@ static float compensate_x(int16_t mag_data_x, uint16_t data_rhall, const struct 
     float process_comp_x4;
 
     /* Overflow condition check */
-    if ((mag_data_x != BMM150_XYAXES_FLIP_OVERFLOW_ADCVAL) && (data_rhall != 0) && (dev->trim_data.dig_xyz1 != 0))
+    if ((mag_data_x != BMM150_OVERFLOW_ADCVAL_XYAXES_FLIP) && (data_rhall != 0) && (dev->trim_data.dig_xyz1 != 0))
     {
-        /*Processing compensation equations*/
+        /* Processing compensation equations */
         process_comp_x0 = (((float)dev->trim_data.dig_xyz1) * 16384.0f / data_rhall);
         retval = (process_comp_x0 - 16384.0f);
         process_comp_x1 = ((float)dev->trim_data.dig_xy2) * (retval * retval / 268435456.0f);
@@ -1602,7 +1634,7 @@ static float compensate_x(int16_t mag_data_x, uint16_t data_rhall, const struct 
     }
     else
     {
-        /* overflow, set output to 0.0f */
+        /* Overflow, set output to 0.0f */
         retval = BMM150_OVERFLOW_OUTPUT_FLOAT;
     }
 
@@ -1623,9 +1655,9 @@ static float compensate_y(int16_t mag_data_y, uint16_t data_rhall, const struct 
     float process_comp_y4;
 
     /* Overflow condition check */
-    if ((mag_data_y != BMM150_XYAXES_FLIP_OVERFLOW_ADCVAL) && (data_rhall != 0) && (dev->trim_data.dig_xyz1 != 0))
+    if ((mag_data_y != BMM150_OVERFLOW_ADCVAL_XYAXES_FLIP) && (data_rhall != 0) && (dev->trim_data.dig_xyz1 != 0))
     {
-        /*Processing compensation equations*/
+        /* Processing compensation equations */
         process_comp_y0 = ((float)dev->trim_data.dig_xyz1) * 16384.0f / data_rhall;
         retval = process_comp_y0 - 16384.0f;
         process_comp_y1 = ((float)dev->trim_data.dig_xy2) * (retval * retval / 268435456.0f);
@@ -1636,7 +1668,7 @@ static float compensate_y(int16_t mag_data_y, uint16_t data_rhall, const struct 
     }
     else
     {
-        /* overflow, set output to 0.0f */
+        /* Overflow, set output to 0.0f */
         retval = BMM150_OVERFLOW_OUTPUT_FLOAT;
     }
 
@@ -1658,7 +1690,7 @@ static float compensate_z(int16_t mag_data_z, uint16_t data_rhall, const struct 
     float process_comp_z5;
 
     /* Overflow condition check */
-    if ((mag_data_z != BMM150_ZAXIS_HALL_OVERFLOW_ADCVAL) && (dev->trim_data.dig_z2 != 0) &&
+    if ((mag_data_z != BMM150_OVERFLOW_ADCVAL_ZAXIS_HALL) && (dev->trim_data.dig_z2 != 0) &&
         (dev->trim_data.dig_z1 != 0) && (dev->trim_data.dig_xyz1 != 0) && (data_rhall != 0))
     {
         /* Processing compensation equations */
@@ -1672,7 +1704,7 @@ static float compensate_z(int16_t mag_data_z, uint16_t data_rhall, const struct 
     }
     else
     {
-        /* overflow, set output to 0.0f */
+        /* Overflow, set output to 0.0f */
         retval = BMM150_OVERFLOW_OUTPUT_FLOAT;
     }
 
@@ -1701,11 +1733,11 @@ static int16_t compensate_x(int16_t mag_data_x, uint16_t data_rhall, const struc
     int32_t process_comp_x10;
 
     /* Overflow condition check */
-    if (mag_data_x != BMM150_XYAXES_FLIP_OVERFLOW_ADCVAL)
+    if (mag_data_x != BMM150_OVERFLOW_ADCVAL_XYAXES_FLIP)
     {
         if (data_rhall != 0)
         {
-            /* Availability of valid data*/
+            /* Availability of valid data */
             process_comp_x0 = data_rhall;
         }
         else if (dev->trim_data.dig_xyz1 != 0)
@@ -1716,9 +1748,10 @@ static int16_t compensate_x(int16_t mag_data_x, uint16_t data_rhall, const struc
         {
             process_comp_x0 = 0;
         }
+
         if (process_comp_x0 != 0)
         {
-            /* Processing compensation equations*/
+            /* Processing compensation equations */
             process_comp_x1 = ((int32_t)dev->trim_data.dig_xyz1) * 16384;
             process_comp_x2 = ((uint16_t)(process_comp_x1 / process_comp_x0)) - ((uint16_t)0x4000);
             retval = ((int16_t)process_comp_x2);
@@ -1766,11 +1799,11 @@ static int16_t compensate_y(int16_t mag_data_y, uint16_t data_rhall, const struc
     int32_t process_comp_y9;
 
     /* Overflow condition check */
-    if (mag_data_y != BMM150_XYAXES_FLIP_OVERFLOW_ADCVAL)
+    if (mag_data_y != BMM150_OVERFLOW_ADCVAL_XYAXES_FLIP)
     {
         if (data_rhall != 0)
         {
-            /* Availability of valid data*/
+            /* Availability of valid data */
             process_comp_y0 = data_rhall;
         }
         else if (dev->trim_data.dig_xyz1 != 0)
@@ -1781,9 +1814,10 @@ static int16_t compensate_y(int16_t mag_data_y, uint16_t data_rhall, const struc
         {
             process_comp_y0 = 0;
         }
+
         if (process_comp_y0 != 0)
         {
-            /*Processing compensation equations*/
+            /* Processing compensation equations */
             process_comp_y1 = (((int32_t)dev->trim_data.dig_xyz1) * 16384) / process_comp_y0;
             process_comp_y2 = ((uint16_t)process_comp_y1) - ((uint16_t)0x4000);
             retval = ((int16_t)process_comp_y2);
@@ -1804,7 +1838,7 @@ static int16_t compensate_y(int16_t mag_data_y, uint16_t data_rhall, const struc
     }
     else
     {
-        /* Overflow condition*/
+        /* Overflow condition */
         retval = BMM150_OVERFLOW_OUTPUT;
     }
 
@@ -1824,12 +1858,12 @@ static int16_t compensate_z(int16_t mag_data_z, uint16_t data_rhall, const struc
     int32_t process_comp_z3;
     int16_t process_comp_z4;
 
-    if (mag_data_z != BMM150_ZAXIS_HALL_OVERFLOW_ADCVAL)
+    if (mag_data_z != BMM150_OVERFLOW_ADCVAL_ZAXIS_HALL)
     {
         if ((dev->trim_data.dig_z2 != 0) && (dev->trim_data.dig_z1 != 0) && (data_rhall != 0) &&
             (dev->trim_data.dig_xyz1 != 0))
         {
-            /*Processing compensation equations*/
+            /*Processing compensation equations */
             process_comp_z0 = ((int16_t)data_rhall) - ((int16_t) dev->trim_data.dig_xyz1);
             process_comp_z1 = (((int32_t)dev->trim_data.dig_z3) * ((int32_t)(process_comp_z0))) / 4;
             process_comp_z2 = (((int32_t)(mag_data_z - dev->trim_data.dig_z4)) * 32768);
@@ -1837,7 +1871,7 @@ static int16_t compensate_z(int16_t mag_data_z, uint16_t data_rhall, const struc
             process_comp_z4 = (int16_t)((process_comp_z3 + (32768)) / 65536);
             retval = ((process_comp_z2 - process_comp_z1) / (dev->trim_data.dig_z2 + process_comp_z4));
 
-            /* saturate result to +/- 2 micro-tesla */
+            /* Saturate result to +/- 2 micro-tesla */
             if (retval > BMM150_POSITIVE_SATURATION_Z)
             {
                 retval = BMM150_POSITIVE_SATURATION_Z;
@@ -1847,7 +1881,7 @@ static int16_t compensate_z(int16_t mag_data_z, uint16_t data_rhall, const struc
                 retval = BMM150_NEGATIVE_SATURATION_Z;
             }
 
-            /* Conversion of LSB to micro-tesla*/
+            /* Conversion of LSB to micro-tesla */
             retval = retval / 16;
         }
         else
@@ -1857,7 +1891,7 @@ static int16_t compensate_z(int16_t mag_data_z, uint16_t data_rhall, const struc
     }
     else
     {
-        /* Overflow condition*/
+        /* Overflow condition */
         retval = BMM150_OVERFLOW_OUTPUT;
     }
 
@@ -1870,7 +1904,7 @@ static int16_t compensate_z(int16_t mag_data_z, uint16_t data_rhall, const struc
  * @brief This internal API is used to perform the normal self test
  * of the sensor and return the self test result as return value
  */
-static int8_t perform_normal_self_test(const struct bmm150_dev *dev)
+static int8_t perform_normal_self_test(struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t self_test_bit;
@@ -1893,14 +1927,15 @@ static int8_t perform_normal_self_test(const struct bmm150_dev *dev)
  * the Self Test bit (bit0) of the 0x4C register,
  * which triggers the start of self test
  */
-static int8_t enable_normal_self_test(uint8_t *self_test_enable, const struct bmm150_dev *dev)
+static int8_t enable_normal_self_test(uint8_t *self_test_enable, struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t reg_data;
     uint8_t self_test_val;
 
     /* Read the data from register 0x4C */
-    rslt = bmm150_get_regs(BMM150_OP_MODE_ADDR, &reg_data, 1, dev);
+    rslt = bmm150_get_regs(BMM150_REG_OP_MODE, &reg_data, 1, dev);
+
     if (rslt == BMM150_OK)
     {
         /* Set the Self Test bit(bit0) of the 0x4C register */
@@ -1908,15 +1943,17 @@ static int8_t enable_normal_self_test(uint8_t *self_test_enable, const struct bm
         reg_data = BMM150_SET_BITS_POS_0(reg_data, BMM150_SELF_TEST, self_test_val);
 
         /* Write the data to 0x4C register to trigger self test */
-        rslt = bmm150_set_regs(BMM150_OP_MODE_ADDR, &reg_data, 1, dev);
-        dev->delay_ms(BMM150_NORMAL_SELF_TEST_DELAY);
+        rslt = bmm150_set_regs(BMM150_REG_OP_MODE, &reg_data, 1, dev);
+        dev->delay_us(BMM150_DELAY_NORMAL_SELF_TEST, dev->intf_ptr);
+
         if (rslt == BMM150_OK)
         {
             /* Read the data from register 0x4C */
-            rslt = bmm150_get_regs(BMM150_OP_MODE_ADDR, &reg_data, 1, dev);
+            rslt = bmm150_get_regs(BMM150_REG_OP_MODE, &reg_data, 1, dev);
 
             /* Self Test bit(bit0) is stored in self_test_enable,
-             * It will be reset to zero after the self test is over */
+             * It will be reset to zero after the self test is over
+             */
             *self_test_enable = BMM150_GET_BITS_POS_0(reg_data, BMM150_SELF_TEST);
         }
     }
@@ -1929,18 +1966,19 @@ static int8_t enable_normal_self_test(uint8_t *self_test_enable, const struct bm
  * by using the self test status available in the bit0 of registers 0x42,0x44
  * and 0x46.
  */
-static int8_t validate_normal_self_test(const struct bmm150_dev *dev)
+static int8_t validate_normal_self_test(struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t status;
     uint8_t self_test_rslt[5];
 
     /* Read the data from register 0x42 to 0x46 */
-    rslt = bmm150_get_regs(BMM150_DATA_X_LSB, self_test_rslt, BMM150_SELF_TEST_LEN, dev);
+    rslt = bmm150_get_regs(BMM150_REG_DATA_X_LSB, self_test_rslt, BMM150_LEN_SELF_TEST, dev);
+
     if (rslt == BMM150_OK)
     {
         /* Parse and get the self test status bits */
-        /* X-Self-Test (bit0) of 0x42 register is stored*/
+        /* X-Self-Test (bit0) of 0x42 register is stored */
         self_test_rslt[0] = BMM150_GET_BITS_POS_0(self_test_rslt[0], BMM150_SELF_TEST);
 
         /* Y-Self-Test (bit0) of 0x44 register is stored */
@@ -1950,7 +1988,8 @@ static int8_t validate_normal_self_test(const struct bmm150_dev *dev)
         self_test_rslt[4] = BMM150_GET_BITS_POS_0(self_test_rslt[4], BMM150_SELF_TEST);
 
         /* Combine the self test status and store it in the first
-         * 3 bits of the status variable for processing*/
+         * 3 bits of the status variable for processing
+         */
         status = (uint8_t)((self_test_rslt[4] << 2) | (self_test_rslt[2] << 1) | self_test_rslt[0]);
 
         /* Validate status and store Self test result in "rslt" */
@@ -1989,22 +2028,27 @@ static int8_t perform_adv_self_test(struct bmm150_dev *dev)
 
     /* Set the desired power mode ,axes control and repetition settings */
     rslt = adv_self_test_settings(dev);
+
     if (rslt == BMM150_OK)
     {
         /* Measure the Z axes data with positive self-test current */
         self_test_current = BMM150_ENABLE_POSITIVE_CURRENT;
         rslt = adv_self_test_measurement(self_test_current, &positive_data_z, dev);
+
         if (rslt == BMM150_OK)
         {
             /* Measure the Z axes data with
-            * negative self-test current */
+             * negative self-test current
+             */
             self_test_current = BMM150_ENABLE_NEGATIVE_CURRENT;
             rslt = adv_self_test_measurement(self_test_current, &negative_data_z, dev);
+
             if (rslt == BMM150_OK)
             {
                 /* Disable self-test current */
                 self_test_current = BMM150_DISABLE_SELF_TEST_CURRENT;
                 rslt = set_adv_self_test_current(self_test_current, dev);
+
                 if (rslt == BMM150_OK)
                 {
                     /* Validate the advanced self test */
@@ -2024,20 +2068,23 @@ static int8_t perform_adv_self_test(struct bmm150_dev *dev)
 static int8_t adv_self_test_settings(struct bmm150_dev *dev)
 {
     int8_t rslt;
+    struct bmm150_settings settings;
 
     /* Set the power mode as sleep mode */
-    dev->settings.pwr_mode = BMM150_SLEEP_MODE;
-    rslt = bmm150_set_op_mode(dev);
+    settings.pwr_mode = BMM150_POWERMODE_SLEEP;
+    rslt = bmm150_set_op_mode(&settings, dev);
+
     if (rslt == BMM150_OK)
     {
         /* Disable XY-axis measurement */
-        dev->settings.xyz_axes_control = BMM150_DISABLE_XY_AXIS;
-        rslt = set_control_measurement_xyz(dev);
+        settings.xyz_axes_control = BMM150_DISABLE_XY_AXIS;
+        rslt = set_control_measurement_xyz(&settings, dev);
+
         if (rslt == BMM150_OK)
         {
             /* Repetition value is set as 0x04 */
-            dev->settings.z_rep = BMM150_SELF_TEST_REP_Z;
-            rslt = set_z_rep(dev);
+            settings.z_rep = BMM150_SELF_TEST_REP_Z;
+            rslt = set_z_rep(&settings, dev);
         }
     }
 
@@ -2051,26 +2098,32 @@ static int8_t adv_self_test_settings(struct bmm150_dev *dev)
 static int8_t adv_self_test_measurement(uint8_t self_test_current, int16_t *data_z, struct bmm150_dev *dev)
 {
     int8_t rslt;
+    struct bmm150_settings settings;
+    struct bmm150_mag_data mag_data;
 
     /* Set the advanced self test current as positive or
-     * negative based on the value of parameter "self_test_current" */
+     * negative based on the value of parameter "self_test_current"
+     */
     rslt = set_adv_self_test_current(self_test_current, dev);
+
     if (rslt == BMM150_OK)
     {
-        /* Set the device in forced mode*/
-        dev->settings.pwr_mode = BMM150_FORCED_MODE;
-        rslt = bmm150_set_op_mode(dev);
+        /* Set the device in forced mode */
+        settings.pwr_mode = BMM150_POWERMODE_FORCED;
+        rslt = bmm150_set_op_mode(&settings, dev);
 
         /* Delay to ensure measurement is complete */
-        dev->delay_ms(BMM150_ADV_SELF_TEST_DELAY);
+        dev->delay_us(BMM150_DELAY_ADV_SELF_TEST, dev->intf_ptr);
+
         if (rslt == BMM150_OK)
         {
             /* Read Mag data and store the value of Z axis data */
-            rslt = bmm150_read_mag_data(dev);
+            rslt = bmm150_read_mag_data(&mag_data, dev);
+
             if (rslt == BMM150_OK)
             {
                 /* Mag Z axis data is stored */
-                *data_z = dev->data.z;
+                *data_z = mag_data.z;
             }
         }
     }
@@ -2089,11 +2142,12 @@ static int8_t validate_adv_self_test(int16_t positive_data_z, int16_t negative_d
     int8_t rslt;
 
     /* Advanced self test difference between the Z axis mag data
-    * obtained by the positive and negative self-test current */
+     * obtained by the positive and negative self-test current
+     */
     adv_self_test_rslt = positive_data_z - negative_data_z;
 
     /* Advanced self test validation */
-    /*Value of adv_self_test_rslt should be in between 180-240 micro-tesla*/
+    /*Value of adv_self_test_rslt should be in between 180-240 micro-tesla */
     if ((adv_self_test_rslt > 180) && (adv_self_test_rslt < 240))
     {
         /* Advanced self test success */
@@ -2112,19 +2166,21 @@ static int8_t validate_adv_self_test(int16_t positive_data_z, int16_t negative_d
  * @brief This internal API is used to set the self test current value in
  * the Adv. ST bits (bit6 and bit7) of 0x4C register
  */
-static int8_t set_adv_self_test_current(uint8_t self_test_current, const struct bmm150_dev *dev)
+static int8_t set_adv_self_test_current(uint8_t self_test_current, struct bmm150_dev *dev)
 {
     int8_t rslt;
     uint8_t reg_data;
 
     /* Read the 0x4C register */
-    rslt = bmm150_get_regs(BMM150_OP_MODE_ADDR, &reg_data, 1, dev);
+    rslt = bmm150_get_regs(BMM150_REG_OP_MODE, &reg_data, 1, dev);
+
     if (rslt == BMM150_OK)
     {
         /* Set the self test current value in the Adv. ST bits
-         * (bit6 and bit7) of 0x4c register */
+         * (bit6 and bit7) of 0x4c register
+         */
         reg_data = BMM150_SET_BITS(reg_data, BMM150_ADV_SELF_TEST, self_test_current);
-        rslt = bmm150_set_regs(BMM150_OP_MODE_ADDR, &reg_data, 1, dev);
+        rslt = bmm150_set_regs(BMM150_REG_OP_MODE, &reg_data, 1, dev);
     }
 
     return rslt;
